@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  DRIVER
+}
+
+enum ShipmentStatus {
+  PENDING
+  PACKED
+  IN_TRANSIT
+  DELIVERED
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DELIVERY
+  UNAVAILABLE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(MANAGER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Warehouse {
+  id           String     @id @default(uuid())
+  name         String
+  locationName String
+  lat          Float
+  lng          Float
+  capacity     Int
+  currentUsage Int        @default(0)
+  shipments    Shipment[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Driver {
+  id            String       @id @default(uuid())
+  name          String
+  phone         String
+  vehicleNumber String
+  status        DriverStatus @default(AVAILABLE)
+  shipments     Shipment[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Shipment {
+  id               String         @id @default(uuid())
+  source           String
+  destination      String
+  weight           Float
+  priority         String         @default("Normal")
+  status           ShipmentStatus @default(PENDING)
+  driverId         String?
+  driver           Driver?        @relation(fields: [driverId], references: [id])
+  warehouseId      String?
+  warehouse        Warehouse?     @relation(fields: [warehouseId], references: [id])
+  deliveryDate     DateTime?
+  deliveryLogs     DeliveryLog[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model DeliveryLog {
+  id         String         @id @default(uuid())
+  shipmentId String
+  shipment   Shipment       @relation(fields: [shipmentId], references: [id])
+  status     ShipmentStatus
+  timestamp  DateTime       @default(now())
+  notes      String?
+}
