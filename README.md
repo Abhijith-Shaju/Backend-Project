@@ -16,7 +16,7 @@ LogiFlow is a comprehensive logistics and supply chain management system designe
 
 - **Frontend**: React.js, Vite, Tailwind CSS, Axios, Lucide React, Recharts, Leaflet.js
 - **Backend**: Node.js, Express.js
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: MongoDB with Mongoose
 - **Security**: JWT, bcrypt
 
 ## 📁 Project Structure
@@ -24,12 +24,12 @@ LogiFlow is a comprehensive logistics and supply chain management system designe
 ```text
 logiflow/
 ├── backend/
-│   ├── prisma/             # Database schema and seed data
+│   ├── seed.js             # MongoDB seed data
 │   ├── src/
 │   │   ├── controllers/    # API logic
 │   │   ├── middleware/     # Auth & validation
 │   │   ├── routes/         # Endpoint definitions
-│   │   ├── services/       # Prisma client
+│   │   ├── services/       # Database connection
 │   │   └── server.js       # Entry point
 │   └── .env                # Server configuration
 └── frontend/
@@ -46,15 +46,15 @@ logiflow/
 
 ### Prerequisites
 - Node.js (v16+)
-- PostgreSQL database
+- MongoDB database
 
 ### Backend Setup
 1. Navigate to the backend directory: `cd backend`
 2. Install dependencies: `npm install`
-3. Configure your `.env` file with `DATABASE_URL` and `JWT_SECRET`.
-4. Run migrations: `npx prisma migrate dev --name init`
-5. Seed the database: `node prisma/seed.js`
-6. Start the server: `npm run dev`
+3. Configure your `.env` file with `DATABASE_URL` or `MONGODB_URI`, and `JWT_SECRET`.
+   - Example: `DATABASE_URL="mongodb+srv://USER:PASSWORD@HOST/logiflow?retryWrites=true&w=majority"`
+4. Seed the database: `node seed.js`
+5. Start the server: `npm run dev`
 
 ### Frontend Setup
 1. Navigate to the frontend directory: `cd frontend`

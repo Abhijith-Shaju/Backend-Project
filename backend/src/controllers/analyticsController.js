@@ -1,21 +1,21 @@
-const prisma = require('../services/prisma');
+const Shipment = require('../models/Shipment');
+const Driver = require('../models/Driver');
+const Warehouse = require('../models/Warehouse');
 
 const getDashboardStats = async (req, res) => {
   try {
-    const totalShipments = await prisma.shipment.count();
-    const deliveredShipments = await prisma.shipment.count({ where: { status: 'DELIVERED' } });
-    const pendingShipments = await prisma.shipment.count({ where: { status: 'PENDING' } });
-    const inTransitShipments = await prisma.shipment.count({ where: { status: 'IN_TRANSIT' } });
-    const activeDrivers = await prisma.driver.count({ where: { status: 'AVAILABLE' } });
+    const totalShipments = await Shipment.countDocuments();
+    const deliveredShipments = await Shipment.countDocuments({ status: 'DELIVERED' });
+    const pendingShipments = await Shipment.countDocuments({ status: 'PENDING' });
+    const inTransitShipments = await Shipment.countDocuments({ status: 'IN_TRANSIT' });
+    const activeDrivers = await Driver.countDocuments({ status: 'AVAILABLE' });
     
-    const warehouses = await prisma.warehouse.findMany({
-      select: { name: true, capacity: true, currentUsage: true }
-    });
+    const warehouses = await Warehouse.find({}, { name: 1, capacity: 1, currentUsage: 1 });
 
-    const deliveryTrends = await prisma.shipment.groupBy({
-      by: ['status'],
-      _count: { id: true }
-    });
+    const deliveryTrends = await Shipment.aggregate([
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+      { $project: { _id: 0, status: '$_id', _count: { id: '$count' } } }
+    ]);
 
     res.status(200).json({
       summary: {

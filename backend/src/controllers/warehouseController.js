@@ -1,11 +1,18 @@
-const prisma = require('../services/prisma');
+const Warehouse = require('../models/Warehouse');
+const Shipment = require('../models/Shipment');
 
 const getAllWarehouses = async (req, res) => {
   try {
-    const warehouses = await prisma.warehouse.findMany({
-      include: { _count: { select: { shipments: true } } }
-    });
-    res.status(200).json(warehouses);
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+    const counts = await Shipment.aggregate([
+      { $match: { warehouseId: { $ne: null } } },
+      { $group: { _id: '$warehouseId', shipments: { $sum: 1 } } }
+    ]);
+    const countMap = new Map(counts.map((item) => [item._id.toString(), item.shipments]));
+    res.status(200).json(warehouses.map((warehouse) => ({
+      ...warehouse.toJSON(),
+      _count: { shipments: countMap.get(warehouse.id) || 0 }
+    })));
   } catch (error) {
     res.status(500).json({ message: 'Error fetching warehouses', error: error.message });
   }
@@ -14,12 +21,10 @@ const getAllWarehouses = async (req, res) => {
 const getWarehouseById = async (req, res) => {
   try {
     const { id } = req.params;
-    const warehouse = await prisma.warehouse.findUnique({
-      where: { id },
-      include: { shipments: true }
-    });
+    const warehouse = await Warehouse.findById(id);
     if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
-    res.status(200).json(warehouse);
+    const shipments = await Shipment.find({ warehouseId: id }).sort({ createdAt: -1 });
+    res.status(200).json({ ...warehouse.toJSON(), shipments });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching warehouse', error: error.message });
   }
@@ -41,15 +46,13 @@ const createWarehouse = async (req, res) => {
       return res.status(400).json({ message: 'Current usage must be between 0 and capacity.' });
     }
 
-    const warehouse = await prisma.warehouse.create({
-      data: {
-        name: name.trim(),
-        locationName: locationName.trim(),
-        lat: latitude,
-        lng: longitude,
-        capacity: Math.round(totalCapacity),
-        currentUsage: Math.round(usage)
-      }
+    const warehouse = await Warehouse.create({
+      name: name.trim(),
+      locationName: locationName.trim(),
+      lat: latitude,
+      lng: longitude,
+      capacity: Math.round(totalCapacity),
+      currentUsage: Math.round(usage)
     });
     res.status(201).json(warehouse);
   } catch (error) {
@@ -61,10 +64,12 @@ const updateWarehouse = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, locationName, lat, lng, capacity } = req.body;
-    const warehouse = await prisma.warehouse.update({
-      where: { id },
-      data: { name, locationName, lat, lng, capacity }
-    });
+    const warehouse = await Warehouse.findByIdAndUpdate(
+      id,
+      { name, locationName, lat, lng, capacity },
+      { new: true, runValidators: true }
+    );
+    if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
     res.status(200).json(warehouse);
   } catch (error) {
     res.status(500).json({ message: 'Error updating warehouse', error: error.message });
@@ -74,7 +79,9 @@ const updateWarehouse = async (req, res) => {
 const deleteWarehouse = async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.warehouse.delete({ where: { id } });
+    const warehouse = await Warehouse.findByIdAndDelete(id);
+    if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    await Shipment.updateMany({ warehouseId: id }, { $set: { warehouseId: null } });
     res.status(200).json({ message: 'Warehouse deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting warehouse', error: error.message });

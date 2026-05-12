@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const connectDatabase = require('./services/database');
 
 // Load env variables
 dotenv.config();
@@ -31,6 +32,13 @@ app.use('/api/drivers', driverRoutes);
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+connectDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to start server:', error.message);
+    process.exit(1);
+  });

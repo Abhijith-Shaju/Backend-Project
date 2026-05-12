@@ -1,13 +1,13 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const prisma = require('../services/prisma');
+const User = require('../models/User');
 
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -16,13 +16,11 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role || 'MANAGER',
-      },
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: role || 'MANAGER',
     });
 
     res.status(201).json({ message: 'User registered successfully', userId: user.id });
@@ -36,7 +34,7 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     // Find user
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
