@@ -8,12 +8,22 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ message: 'Access denied. No token provided.' });
   }
 
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('CRITICAL: JWT_SECRET is not defined in environment variables.');
+    return res.status(500).json({ message: 'Internal server error. Configuration missing.' });
+  }
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, secret);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(403).json({ message: 'Invalid or expired token.' });
+    console.warn(`JWT Verification failed: ${error.message}`);
+    const message = error.name === 'TokenExpiredError' 
+      ? 'Token has expired. Please login again.' 
+      : 'Invalid token. Please login again.';
+    res.status(403).json({ message });
   }
 };
 

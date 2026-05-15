@@ -18,4 +18,21 @@ api.interceptors.request.use(
   }
 );
 
+// Add a response interceptor to handle authentication failures
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Only redirect if we're not already on the login or register page
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/register') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

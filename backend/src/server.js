@@ -34,6 +34,9 @@ app.use('/api/analytics', analyticsRoutes);
 
 connectDatabase()
   .then(() => {
+    if (!process.env.JWT_SECRET) {
+      console.warn('WARNING: JWT_SECRET is not set. Authentication will fail.');
+    }
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
