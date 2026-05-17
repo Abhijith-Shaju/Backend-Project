@@ -1,31 +1,38 @@
-import axios from "axios";
+import axios from 'axios';
 
-export const api = axios.create({
-  baseURL: "http://localhost:5000/api/v1",
-  withCredentials: true, // For refresh tokens in cookies if used
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("accessToken");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Add a request interceptor to include JWT token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
+// Add a response interceptor to handle authentication failures
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Basic handling: if unauthorized, clear token. 
-      // A more robust app might attempt a token refresh here.
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
-      // Force reload to kick to login screen if unauthorized on protected routes
-      if (window.location.pathname !== "/login") {
-         window.location.href = "/login";
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Only redirect if we're not already on the login or register page
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/register') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
   }
 );
+
+export default api;

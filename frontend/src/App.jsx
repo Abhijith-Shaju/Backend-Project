@@ -1,47 +1,45 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Sidebar } from "./components/Sidebar";
-import { Dashboard } from "./components/Dashboard";
-import { Login } from "./components/Login";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import { SocketProvider } from "./context/SocketContext";
-import { NotificationProvider } from "./context/NotificationContext";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import DashboardLayout from './layouts/DashboardLayout';
 
-function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="loading-screen">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  return (
-    <div className="shell theme-dark">
-      <Sidebar />
-      {children}
-    </div>
-  );
-}
+// Lazy load pages (optional, but good for larger apps)
+// For simplicity in this project, I'll import them directly
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import Shipments from './pages/Shipments';
+import Drivers from './pages/Drivers';
+import Warehouses from './pages/Warehouses';
+import Analytics from './pages/Analytics';
 
-import { ShipmentsPage } from "./pages/ShipmentsPage";
-import { InventoryPage } from "./pages/InventoryPage";
-import { FleetPage } from "./pages/FleetPage";
+import Profile from './pages/Profile';
 
 function App() {
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <NotificationProvider>
-          <BrowserRouter>
-            <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/shipments" element={<ProtectedRoute><ShipmentsPage /></ProtectedRoute>} />
-            <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
-            <Route path="/fleet" element={<ProtectedRoute><FleetPage /></ProtectedRoute>} />
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-        </NotificationProvider>
-      </SocketProvider>
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          
+          <Route path="/" element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Dashboard />} />
+            <Route path="shipments" element={<Shipments />} />
+            <Route path="drivers" element={<Drivers />} />
+            <Route path="warehouses" element={<Warehouses />} />
+            <Route path="analytics" element={<Analytics />} />
+
+            <Route path="profile" element={<Profile />} />
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 
