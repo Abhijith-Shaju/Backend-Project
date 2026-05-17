@@ -13,6 +13,7 @@ import Shipments from './pages/Shipments';
 import Drivers from './pages/Drivers';
 import Warehouses from './pages/Warehouses';
 import Analytics from './pages/Analytics';
+
 import Profile from './pages/Profile';
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
             <Route path="drivers" element={<Drivers />} />
             <Route path="warehouses" element={<Warehouses />} />
             <Route path="analytics" element={<Analytics />} />
+
             <Route path="profile" element={<Profile />} />
           </Route>
         </Routes>

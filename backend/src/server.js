@@ -24,6 +24,7 @@ const warehouseRoutes = require('./routes/warehouseRoutes');
 const driverRoutes = require('./routes/driverRoutes');
 const shipmentRoutes = require('./routes/shipmentRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const aiRoutes = require('./routes/aiRoutes');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
@@ -31,6 +32,7 @@ app.use('/api/warehouses', warehouseRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/ai', aiRoutes);
 
 connectDatabase()
   .then(() => {
