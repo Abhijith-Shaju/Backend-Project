@@ -32,6 +32,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password, role) => {
     await api.post('/auth/register', { name, email, password, role });
+    // Auto-login after successful registration
+    await login(email, password);
   };
 
   return (

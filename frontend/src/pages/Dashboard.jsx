@@ -81,7 +81,6 @@ const Dashboard = () => {
           value={summary.totalShipments || 0} 
           icon={Package} 
           color="bg-primary-500"
-          trend="+12% from last month"
         />
         <StatCard 
           title="In Transit" 
@@ -94,7 +93,7 @@ const Dashboard = () => {
           value={summary.deliveredShipments || 0} 
           icon={CheckCircle2} 
           color="bg-emerald-500"
-          trend="+8% completion rate"
+          trend={summary.totalShipments > 0 ? `${Math.round((summary.deliveredShipments / summary.totalShipments) * 100)}% completion rate` : '0% completion rate'}
         />
         <StatCard 
           title="Active Drivers" 

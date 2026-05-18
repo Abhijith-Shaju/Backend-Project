@@ -3,8 +3,19 @@ const Shipment = require('../models/Shipment');
 
 const getAllDrivers = async (req, res) => {
   try {
-    const drivers = await Driver.find().sort({ createdAt: -1 });
-    res.status(200).json(drivers);
+    const drivers = await Driver.find().sort({ createdAt: -1 }).lean();
+    const shipments = await Shipment.find({ status: { $in: ['PACKED', 'IN_TRANSIT'] } }).lean();
+    
+    const driversWithShipments = drivers.map(driver => {
+      // lean() doesn't auto-add `id` virtual, so we add it manually for the frontend
+      return {
+        ...driver,
+        id: driver._id,
+        activeShipments: shipments.filter(s => String(s.driverId) === String(driver._id)).map(s => ({ ...s, id: s._id }))
+      };
+    });
+    
+    res.status(200).json(driversWithShipments);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching drivers', error: error.message });
   }
@@ -62,7 +73,8 @@ const deleteDriver = async (req, res) => {
     const { id } = req.params;
     const driver = await Driver.findByIdAndDelete(id);
     if (!driver) return res.status(404).json({ message: 'Driver not found' });
-    await Shipment.updateMany({ driverId: id }, { $set: { driverId: null } });
+    await Shipment.updateMany({ driverId: id, status: { $ne: 'DELIVERED' } }, { $set: { driverId: null, status: 'PENDING' } });
+    await Shipment.updateMany({ driverId: id, status: 'DELIVERED' }, { $set: { driverId: null } });
     res.status(200).json({ message: 'Driver deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting driver', error: error.message });

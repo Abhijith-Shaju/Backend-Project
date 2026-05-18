@@ -200,20 +200,16 @@ const Analytics = () => {
       {/* KPI Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Active Shipments', value: summary.unresolved, icon: Boxes, color: 'bg-blue-500', trend: '+4% vs avg', up: true },
-          { label: 'Fleet Availability', value: summary.availableDriversCount, icon: Users, color: 'bg-emerald-500', trend: 'Optimal', up: true },
-          { label: 'Transit Volume', value: summary.inMotion, icon: Truck, color: 'bg-amber-500', trend: '-2% vs peak', up: false },
-          { label: 'Critical Hubs', value: summary.blockedCapacity, icon: AlertTriangle, color: 'bg-rose-500', trend: 'High risk', up: false }
+          { label: 'Active Shipments', value: summary.unresolved, icon: Boxes, color: 'bg-blue-500' },
+          { label: 'Fleet Availability', value: summary.availableDriversCount, icon: Users, color: 'bg-emerald-500' },
+          { label: 'Transit Volume', value: summary.inMotion, icon: Truck, color: 'bg-amber-500' },
+          { label: 'Critical Hubs', value: summary.blockedCapacity, icon: AlertTriangle, color: 'bg-rose-500' }
         ].map((item) => (
           <div key={item.label} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-6 transition-all hover:border-slate-700">
             <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full ${item.color} opacity-[0.03] transition-transform group-hover:scale-150`} />
             <div className="flex items-center justify-between">
               <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${item.color} bg-opacity-10`}>
                 <item.icon className={`h-6 w-6 ${item.color.replace('bg-', 'text-')}`} />
-              </div>
-              <div className={`flex items-center gap-1 text-xs font-bold ${item.up ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {item.up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                {item.trend}
               </div>
             </div>
             <div className="mt-6">
@@ -243,7 +239,7 @@ const Analytics = () => {
                 <div key={item.id} className="group grid gap-6 rounded-2xl border border-slate-800 bg-slate-950 p-5 transition-all hover:border-primary-500/30 lg:grid-cols-[1.2fr_auto_1fr_auto_1.2fr] lg:items-center">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Origin Load</p>
-                    <p className="mt-1 font-bold text-white">#{item.shipment.id.slice(0, 8)}</p>
+                    <p className="mt-1 font-mono font-bold text-white text-sm">{item.shipment.trackingNumber || `#${item.shipment.id.slice(-8).toUpperCase()}`}</p>
                     <p className="truncate text-sm text-slate-400">{item.shipment.source}</p>
                   </div>
                   <ArrowRight className="hidden h-5 w-5 text-slate-800 lg:block group-hover:text-primary-500" />
@@ -330,7 +326,7 @@ const Analytics = () => {
                     <div className="flex items-center gap-4">
                       <div className={`h-2 w-2 rounded-full ${shipment.priority === 'Urgent' ? 'bg-rose-500 animate-pulse shadow-[0_0_8px_#f43f5e]' : shipment.priority === 'High' ? 'bg-amber-500' : 'bg-blue-500'}`} />
                       <div>
-                        <p className="font-bold text-white">#{shipment.id.slice(0, 8)}</p>
+                        <p className="font-mono font-bold text-white text-sm">{shipment.trackingNumber || `#${shipment.id.slice(-8).toUpperCase()}`}</p>
                         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{shipment.priority}</p>
                       </div>
                     </div>

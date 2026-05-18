@@ -10,7 +10,9 @@ import {
   Clock,
   ArrowRight,
   UserRound,
-  Warehouse
+  Warehouse,
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 
 const statuses = ['PENDING', 'PACKED', 'IN_TRANSIT', 'DELIVERED'];
@@ -53,6 +55,7 @@ const Shipments = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
+  const [assigningDriver, setAssigningDriver] = useState(null); // shipmentId being assigned
 
   const fetchData = async () => {
     setLoading(true);
@@ -80,7 +83,7 @@ const Shipments = () => {
     const query = searchTerm.toLowerCase();
     return shipments.filter((shipment) => {
       const matchesSearch =
-        shipment.id.toLowerCase().includes(query) ||
+        (shipment.trackingNumber || '').toLowerCase().includes(query) ||
         shipment.source.toLowerCase().includes(query) ||
         shipment.destination.toLowerCase().includes(query) ||
         shipment.driver?.name?.toLowerCase().includes(query);
@@ -120,11 +123,42 @@ const Shipments = () => {
   const handleStatusChange = async (shipmentId, status) => {
     setError('');
     try {
-      const res = await api.patch(`/shipments/${shipmentId}/status`, { status });
-      setShipments((current) => current.map((shipment) => (shipment.id === shipmentId ? res.data : shipment)));
-      fetchData();
+      await api.patch(`/shipments/${shipmentId}/status`, { status });
+      await fetchData();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not update shipment status.');
+    }
+  };
+
+  const handleAssignDriver = async (shipmentId, driverId, currentStatus) => {
+    setError('');
+    setAssigningDriver(shipmentId);
+    try {
+      // If assigning a driver and the shipment is still sitting at the warehouse, advance it to IN_TRANSIT
+      const newStatus = driverId && (currentStatus === 'PENDING' || currentStatus === 'PACKED')
+        ? 'IN_TRANSIT'
+        : currentStatus;
+
+      await api.patch(`/shipments/${shipmentId}/status`, {
+        driverId: driverId || null,
+        status: newStatus
+      });
+      await fetchData();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not assign driver.');
+    } finally {
+      setAssigningDriver(null);
+    }
+  };
+
+  const handleDelete = async (shipmentId) => {
+    if (!window.confirm('Are you sure you want to delete this shipment? This cannot be undone.')) return;
+    setError('');
+    try {
+      await api.delete(`/shipments/${shipmentId}`);
+      await fetchData();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not delete shipment.');
     }
   };
 
@@ -155,7 +189,7 @@ const Shipments = () => {
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
-            placeholder="Search by ID, source, destination, or driver..."
+            placeholder="Search by tracking number, source, destination, or driver..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             className="w-full rounded-2xl border border-slate-800 bg-slate-900 py-3 pl-12 pr-4 text-white transition-all focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
@@ -182,17 +216,22 @@ const Shipments = () => {
         <div className="grid grid-cols-1 gap-4">
           {filteredShipments.map((shipment) => (
             <div key={shipment.id} className="group rounded-3xl border border-slate-800 bg-slate-900 p-6 transition-all hover:border-primary-500/30">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+              {/* Top row: ID + route + actions */}
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                {/* Tracking & Info */}
                 <div className="flex flex-1 items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 transition-all group-hover:border-primary-500/20">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 transition-all group-hover:border-primary-500/20">
                     <Package className="h-6 w-6 text-primary-500" />
                   </div>
                   <div>
-                    <h4 className="text-lg font-bold text-white">#{shipment.id.slice(0, 8)}</h4>
-                    <p className="text-sm font-medium text-slate-500">{shipment.priority} Priority | {shipment.weight} kg</p>
+                    <h4 className="font-mono text-base font-bold text-white tracking-wide">
+                      {shipment.trackingNumber || `#${shipment.id.slice(-8).toUpperCase()}`}
+                    </h4>
+                    <p className="text-sm font-medium text-slate-500">{shipment.priority} Priority · {shipment.weight} kg</p>
                   </div>
                 </div>
 
+                {/* Route */}
                 <div className="flex-[2] items-center gap-8 md:flex">
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -211,7 +250,9 @@ const Shipments = () => {
                   </div>
                 </div>
 
+                {/* Status, Driver Assignment & Delete */}
                 <div className="flex flex-1 flex-col gap-3 border-t border-slate-800 pt-4 lg:border-t-0 lg:pt-0">
+                  {/* Status badge + dropdown */}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <StatusBadge status={shipment.status} />
                     <select
@@ -224,10 +265,48 @@ const Shipments = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="grid gap-2 text-xs text-slate-500">
-                    <span className="flex items-center gap-2"><UserRound className="h-3 w-3" /> {shipment.driver?.name || 'No driver assigned'}</span>
-                    <span className="flex items-center gap-2"><Warehouse className="h-3 w-3" /> {shipment.warehouse?.name || 'No warehouse linked'}</span>
-                    <span className="flex items-center gap-2"><Clock className="h-3 w-3" /> {new Date(shipment.createdAt).toLocaleDateString()}</span>
+
+                  {/* Driver assignment */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+                      <UserRound className="h-3.5 w-3.5 text-slate-500" />
+                    </div>
+                    <select
+                      value={shipment.driverId || ''}
+                      onChange={(e) => handleAssignDriver(shipment.id, e.target.value, shipment.status)}
+                      disabled={assigningDriver === shipment.id || shipment.status === 'DELIVERED'}
+                      className="flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-300 outline-none focus:border-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">— No driver assigned —</option>
+                      {drivers.map((driver) => (
+                        <option key={driver.id} value={driver.id}>
+                          {driver.name} ({driver.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Warehouse + date */}
+                  <div className="grid gap-1 text-xs text-slate-500">
+                    <span className="flex items-center gap-2">
+                      <Warehouse className="h-3 w-3" />
+                      {shipment.warehouse?.name || 'No warehouse linked'}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Clock className="h-3 w-3" />
+                      {new Date(shipment.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {/* Delete */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => handleDelete(shipment.id)}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               </div>
@@ -276,7 +355,7 @@ const Shipments = () => {
               <label className="grid gap-2 text-sm font-medium text-slate-300">
                 Warehouse
                 <select name="warehouseId" value={form.warehouseId} onChange={handleChange} className={fieldClass}>
-                  <option value="">No warehouse</option>
+                  <option value="">Auto-allocate (Smart Optimization)</option>
                   {warehouses.map((warehouse) => (
                     <option key={warehouse.id} value={warehouse.id}>
                       {warehouse.name} ({warehouse.capacity - warehouse.currentUsage} kg free)
@@ -296,6 +375,11 @@ const Shipments = () => {
                 </select>
               </label>
             </div>
+            {error && (
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => setShowCreateModal(false)} className="rounded-xl border border-slate-800 px-5 py-3 font-semibold text-slate-300 transition-colors hover:bg-slate-800">
                 Cancel

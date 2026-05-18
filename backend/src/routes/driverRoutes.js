@@ -14,6 +14,6 @@ router.get('/', authenticateToken, getAllDrivers);
 router.get('/:id', authenticateToken, getDriverById);
 router.post('/', authenticateToken, authorizeRole(['ADMIN', 'MANAGER']), createDriver);
 router.put('/:id', authenticateToken, authorizeRole(['ADMIN', 'MANAGER']), updateDriver);
-router.delete('/:id', authenticateToken, authorizeRole(['ADMIN']), deleteDriver);
+router.delete('/:id', authenticateToken, authorizeRole(['ADMIN', 'MANAGER']), deleteDriver);
 
 module.exports = router;

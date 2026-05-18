@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 import FormModal from '../components/FormModal';
-import { Plus, Search, User, Phone, Car, CheckCircle, XCircle, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Search, User, Phone, Car, CheckCircle, XCircle, MoreVertical, Edit2, Trash2, MapPin } from 'lucide-react';
 
 const fieldClass = 'w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20';
 
@@ -22,6 +22,7 @@ const Drivers = () => {
   const [error, setError] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [optimizationResult, setOptimizationResult] = useState(null);
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -88,6 +89,17 @@ const Drivers = () => {
     }
   };
 
+  const handleOptimizeRoute = async (driverId) => {
+    setActiveMenu(null);
+    setError('');
+    try {
+      const res = await api.get(`/shipments/driver/${driverId}/optimize`);
+      setOptimizationResult(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not optimize route.');
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -95,12 +107,11 @@ const Drivers = () => {
 
     try {
       if (editingId) {
-        const res = await api.put(`/drivers/${editingId}`, form);
-        setDrivers((current) => current.map((d) => (d.id === editingId ? res.data : d)));
+        await api.put(`/drivers/${editingId}`, form);
       } else {
-        const res = await api.post('/drivers', form);
-        setDrivers((current) => [res.data, ...current]);
+        await api.post('/drivers', form);
       }
+      await fetchDrivers();
       setForm(initialForm);
       setShowModal(false);
     } catch (err) {
@@ -147,8 +158,8 @@ const Drivers = () => {
         {loading ? (
           <p className="col-span-full text-center text-white">Loading drivers...</p>
         ) : filteredDrivers.map((driver) => (
-          <div key={driver.id} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-6 transition-all hover:border-slate-700">
-            <div className="relative z-10 flex items-start justify-between">
+          <div key={driver.id} className={`group relative rounded-3xl border border-slate-800 bg-slate-900 p-6 transition-all hover:border-slate-700 ${activeMenu === driver.id ? 'z-40' : 'z-10'}`}>
+            <div className="relative z-20 flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 transition-all group-hover:border-primary-500/20">
                   <User className="h-7 w-7 text-primary-500" />
@@ -175,14 +186,21 @@ const Drivers = () => {
                 {activeMenu === driver.id && (
                   <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in duration-200">
                     <button 
-                      onClick={() => handleEdit(driver)}
+                      onClick={(e) => { e.stopPropagation(); handleOptimizeRoute(driver.id); }}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300 border-b border-slate-800"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Optimize Route
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleEdit(driver); }}
                       className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
                     >
                       <Edit2 className="h-4 w-4" />
                       Edit Details
                     </button>
                     <button 
-                      onClick={() => handleDelete(driver.id)}
+                      onClick={(e) => { e.stopPropagation(); handleDelete(driver.id); }}
                       className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -206,6 +224,32 @@ const Drivers = () => {
                 </div>
                 <span className="text-sm font-medium">Vehicle: {driver.vehicleNumber}</span>
               </div>
+            </div>
+
+            {/* Shipments Section */}
+            <div className="relative z-10 mt-6 pt-6 border-t border-slate-800">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Shipments</h4>
+                <span className="bg-slate-800 text-slate-300 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {driver.activeShipments?.length || 0}
+                </span>
+              </div>
+              
+              {driver.activeShipments?.length > 0 ? (
+                <div className="space-y-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                  {driver.activeShipments.map(shipment => (
+                    <div key={shipment.id} className="text-xs flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                      <div className="truncate pr-2">
+                        <span className="text-slate-300 block truncate">{shipment.destination}</span>
+                        <span className="text-slate-500 text-[10px] uppercase font-semibold">{shipment.priority} Priority</span>
+                      </div>
+                      <span className="shrink-0 text-slate-500">{shipment.weight}kg</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic">No active deliveries assigned.</p>
+              )}
             </div>
           </div>
         ))}
@@ -256,6 +300,42 @@ const Drivers = () => {
               </button>
             </div>
           </form>
+        </FormModal>
+      )}
+
+      {optimizationResult && (
+        <FormModal 
+          title="Optimized Delivery Route" 
+          description={optimizationResult.message} 
+          onClose={() => setOptimizationResult(null)}
+        >
+          <div className="space-y-4">
+            {optimizationResult.optimizedRoute?.length > 0 ? (
+              <div className="space-y-3">
+                {optimizationResult.optimizedRoute.map((shipment, idx) => (
+                  <div key={shipment.id} className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white shrink-0">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-white truncate">{shipment.destination}</div>
+                      <div className="text-xs text-slate-400">
+                        From: {shipment.source} • Priority: {shipment.priority} • Weight: {shipment.weight}kg
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400 py-4 text-center">This driver currently has no active shipments to optimize.</p>
+            )}
+            
+            <div className="flex justify-end pt-4 border-t border-slate-800">
+              <button onClick={() => setOptimizationResult(null)} className="rounded-xl bg-primary-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-primary-500">
+                Done
+              </button>
+            </div>
+          </div>
         </FormModal>
       )}
     </div>

@@ -106,12 +106,11 @@ const Warehouses = () => {
       };
 
       if (editingId) {
-        const res = await api.put(`/warehouses/${editingId}`, payload);
-        setWarehouses((current) => current.map((w) => (w.id === editingId ? res.data : w)));
+        await api.put(`/warehouses/${editingId}`, payload);
       } else {
-        const res = await api.post('/warehouses', payload);
-        setWarehouses((current) => [res.data, ...current]);
+        await api.post('/warehouses', payload);
       }
+      await fetchWarehouses();
       setForm(initialForm);
       setShowModal(false);
     } catch (err) {
@@ -160,7 +159,7 @@ const Warehouses = () => {
         ) : filteredWarehouses.map((warehouse) => {
           const usagePercent = warehouse.capacity > 0 ? Math.round((warehouse.currentUsage / warehouse.capacity) * 100) : 0;
           return (
-            <div key={warehouse.id} className="group rounded-3xl border border-slate-800 bg-slate-900 p-8 transition-all hover:border-slate-700">
+            <div key={warehouse.id} className={`group rounded-3xl border border-slate-800 bg-slate-900 p-8 transition-all hover:border-slate-700 relative ${activeMenu === warehouse.id ? 'z-40' : 'z-10'}`}>
               <div className="flex items-start justify-between">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-800 bg-slate-950 transition-all group-hover:border-primary-500/20">
                   <WarehouseIcon className="h-7 w-7 text-primary-500" />
@@ -179,14 +178,14 @@ const Warehouses = () => {
                   {activeMenu === warehouse.id && (
                     <div className="absolute right-0 top-11 z-20 w-40 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-2xl animate-in fade-in zoom-in duration-200">
                       <button 
-                        onClick={() => handleEdit(warehouse)}
+                        onClick={(e) => { e.stopPropagation(); handleEdit(warehouse); }}
                         className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
                       >
                         <Edit2 className="h-4 w-4" />
                         Edit Hub
                       </button>
                       <button 
-                        onClick={() => handleDelete(warehouse.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(warehouse.id); }}
                         className="flex w-full items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
                       >
                         <Trash2 className="h-4 w-4" />

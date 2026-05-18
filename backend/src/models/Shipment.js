@@ -13,7 +13,8 @@ const shipmentSchema = new mongoose.Schema(
     },
     driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver', default: null },
     warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Warehouse', default: null },
-    deliveryDate: { type: Date, default: null }
+    deliveryDate: { type: Date, default: null },
+    trackingNumber: { type: String, unique: true, sparse: true }
   },
   {
     timestamps: true,

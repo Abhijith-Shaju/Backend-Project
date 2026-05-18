@@ -27,7 +27,7 @@ exports.chatWithAI = async (req, res) => {
     `;
 
     const ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
-    const model = process.env.OLLAMA_MODEL || 'gemma';
+    const model = process.env.OLLAMA_MODEL || 'llama3.2:1b';
 
     const response = await axios.post(`${ollamaUrl}/api/generate`, {
       model: model,
