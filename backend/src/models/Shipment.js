@@ -8,7 +8,7 @@ const shipmentSchema = new mongoose.Schema(
     priority: { type: String, default: 'Normal' },
     status: {
       type: String,
-      enum: ['PENDING', 'PACKED', 'IN_TRANSIT', 'DELIVERED'],
+      enum: ['PENDING', 'PACKED', 'QUEUED', 'IN_TRANSIT', 'DELIVERED'],
       default: 'PENDING'
     },
     driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver', default: null },

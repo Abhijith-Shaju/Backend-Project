@@ -5,7 +5,7 @@ const deliveryLogSchema = new mongoose.Schema(
     shipmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Shipment', required: true },
     status: {
       type: String,
-      enum: ['PENDING', 'PACKED', 'IN_TRANSIT', 'DELIVERED'],
+      enum: ['PENDING', 'PACKED', 'QUEUED', 'IN_TRANSIT', 'DELIVERED'],
       required: true
     },
     timestamp: { type: Date, default: Date.now },

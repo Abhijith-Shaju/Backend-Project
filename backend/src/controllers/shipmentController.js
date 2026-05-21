@@ -24,7 +24,7 @@ const releaseDriverIfIdle = async (driverId, excludedShipmentId) => {
   const activeShipments = await Shipment.countDocuments({
     driverId,
     _id: { $ne: excludedShipmentId },
-    status: { $in: ['PACKED', 'IN_TRANSIT'] }
+    status: { $in: ['PACKED', 'IN_TRANSIT', 'QUEUED'] }
   });
 
   if (activeShipments === 0) {
@@ -69,34 +69,23 @@ const createShipment = async (req, res) => {
       return res.status(400).json({ message: 'Source, destination, and a valid weight are required.' });
     }
 
-    let finalWarehouseId = warehouseId || null;
-
-    if (!finalWarehouseId) {
-      // SMART ALLOCATION: Auto-assign to the warehouse with the most available capacity %
-      const warehouses = await Warehouse.find();
-      let bestWarehouse = null;
-      let highestAvailability = -1;
-
-      for (const w of warehouses) {
-        if (w.currentUsage + shipmentWeight <= w.capacity) {
-          const availability = 1 - (w.currentUsage + shipmentWeight) / w.capacity;
-          if (availability > highestAvailability) {
-            highestAvailability = availability;
-            bestWarehouse = w;
-          }
-        }
-      }
-
-      if (bestWarehouse) {
-        finalWarehouseId = bestWarehouse._id;
-      }
-    } else {
-      const warehouse = await Warehouse.findById(finalWarehouseId);
-      if (!warehouse) throw new Error('Selected warehouse was not found.');
-      if (warehouse.currentUsage + shipmentWeight > warehouse.capacity) {
-        throw new Error('Selected warehouse does not have enough available capacity.');
-      }
+    // Strict Source Mapping: The storage warehouse is always the source warehouse
+    const sourceWarehouse = await Warehouse.findOne({ name: source.trim() });
+    if (!sourceWarehouse) {
+      throw new Error('Source warehouse not found in the database.');
     }
+    
+    // We also validate destination warehouse exists
+    const destWarehouse = await Warehouse.findOne({ name: destination.trim() });
+    if (!destWarehouse) {
+      throw new Error('Destination warehouse not found in the database.');
+    }
+
+    if (sourceWarehouse.currentUsage + shipmentWeight > sourceWarehouse.capacity) {
+      throw new Error('Source warehouse does not have enough available capacity.');
+    }
+    
+    const finalWarehouseId = sourceWarehouse._id;
 
     if (driverId) {
       const driver = await Driver.findById(driverId);
@@ -112,7 +101,7 @@ const createShipment = async (req, res) => {
       priority: priority || 'Normal',
       warehouseId: finalWarehouseId,
       driverId: driverId || null,
-      status: driverId ? 'IN_TRANSIT' : 'PENDING',
+      status: driverId ? 'QUEUED' : 'PENDING',
       trackingNumber
     });
 
@@ -128,6 +117,7 @@ const createShipment = async (req, res) => {
 
     if (driverId) {
       await Driver.findByIdAndUpdate(driverId, { status: 'ON_DELIVERY' });
+      await dispatchNextShipment(driverId);
     }
 
     const shipment = await getShipmentWithRelations(createdShipment.id);
@@ -168,11 +158,24 @@ const updateShipmentStatus = async (req, res) => {
       const isInside = status === 'PENDING' || status === 'PACKED';
 
       if (wasInside && isOutside) {
-        // Left the warehouse, free up capacity
+        // Left the source warehouse, free up capacity
         await Warehouse.findByIdAndUpdate(existing.warehouseId, { $inc: { currentUsage: -existing.weight } });
       } else if (wasOutside && isInside) {
-        // Returned to warehouse, consume capacity
+        // Returned to source warehouse, consume capacity
         await Warehouse.findByIdAndUpdate(existing.warehouseId, { $inc: { currentUsage: existing.weight } });
+      }
+      
+      // Destination warehouse capacity update upon arrival or rollback
+      if (status === 'DELIVERED' && existing.status !== 'DELIVERED') {
+        const destWarehouse = await Warehouse.findOne({ name: existing.destination });
+        if (destWarehouse) {
+          await Warehouse.findByIdAndUpdate(destWarehouse._id, { $inc: { currentUsage: existing.weight } });
+        }
+      } else if (existing.status === 'DELIVERED' && status !== 'DELIVERED') {
+        const destWarehouse = await Warehouse.findOne({ name: existing.destination });
+        if (destWarehouse) {
+          await Warehouse.findByIdAndUpdate(destWarehouse._id, { $inc: { currentUsage: -existing.weight } });
+        }
       }
     }
 
@@ -184,10 +187,12 @@ const updateShipmentStatus = async (req, res) => {
 
     if (driverId && status !== 'DELIVERED') {
       await Driver.findByIdAndUpdate(driverId, { status: 'ON_DELIVERY' });
+      await dispatchNextShipment(driverId);
     }
 
     if (status === 'DELIVERED') {
       await releaseDriverIfIdle(updatedShipment.driverId, id);
+      await dispatchNextShipment(updatedShipment.driverId);
     } else if (existing.driverId && driverId !== undefined && existing.driverId.toString() !== String(driverId || '')) {
       await releaseDriverIfIdle(existing.driverId, id);
     }
@@ -217,29 +222,115 @@ const deleteShipment = async (req, res) => {
   }
 };
 
-// Route Optimization Engine: Calculate the best delivery sequence for a driver
+// Helper to calculate Haversine distance in km between two lat/lng points
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c;
+};
+
+// Helper to get the optimal sequence using Nearest-Neighbor
+const getOptimizedSequence = async (shipments) => {
+  if (!shipments.length) return [];
+  
+  const warehouseNames = [...new Set([
+    ...shipments.map(s => s.source),
+    ...shipments.map(s => s.destination)
+  ])];
+  
+  const warehouses = await Warehouse.find({ name: { $in: warehouseNames } });
+  const warehouseMap = {};
+  warehouses.forEach(w => {
+    warehouseMap[w.name] = { lat: w.lat, lng: w.lng };
+  });
+
+  const priorityWeight = { 'Urgent': 4, 'High': 3, 'Normal': 2, 'Low': 1 };
+  
+  const sortedByPriority = shipments.sort((a, b) => {
+    const pA = priorityWeight[a.priority] || 2;
+    const pB = priorityWeight[b.priority] || 2;
+    return pB - pA;
+  });
+
+  let currentPoint = warehouseMap[sortedByPriority[0].source] || { lat: 0, lng: 0 };
+  const optimizedRoute = [];
+  let remainingShipments = [...sortedByPriority];
+
+  while (remainingShipments.length > 0) {
+    const highestRemainingPriority = priorityWeight[remainingShipments[0].priority] || 2;
+    const candidates = remainingShipments.filter(
+      s => (priorityWeight[s.priority] || 2) === highestRemainingPriority
+    );
+    
+    let closestShipment = null;
+    let shortestDistance = Infinity;
+
+    candidates.forEach(shipment => {
+      const destCoords = warehouseMap[shipment.destination];
+      if (!destCoords) {
+        shortestDistance = -1;
+        closestShipment = shipment;
+      } else {
+        const distance = calculateDistance(currentPoint.lat, currentPoint.lng, destCoords.lat, destCoords.lng);
+        if (distance < shortestDistance) {
+          shortestDistance = distance;
+          closestShipment = shipment;
+        }
+      }
+    });
+
+    optimizedRoute.push(closestShipment);
+    if (warehouseMap[closestShipment.destination]) {
+      currentPoint = warehouseMap[closestShipment.destination];
+    }
+    remainingShipments = remainingShipments.filter(s => s.id !== closestShipment.id);
+  }
+  return optimizedRoute;
+};
+
+// Smart Auto-Dispatcher
+const dispatchNextShipment = async (driverId) => {
+  if (!driverId) return;
+
+  const inTransitCount = await Shipment.countDocuments({ driverId, status: 'IN_TRANSIT' });
+  if (inTransitCount > 0) return; // Driver is busy on an active route
+
+  const queuedShipments = await populateShipment(Shipment.find({ driverId, status: 'QUEUED' }));
+  if (!queuedShipments || queuedShipments.length === 0) return; // Nothing left in the queue
+
+  const optimized = await getOptimizedSequence(queuedShipments);
+  if (optimized.length > 0) {
+    const nextShipmentId = optimized[0].id || optimized[0]._id;
+    await Shipment.findByIdAndUpdate(nextShipmentId, { status: 'IN_TRANSIT' });
+    await DeliveryLog.create({
+      shipmentId: nextShipmentId,
+      status: 'IN_TRANSIT',
+      notes: 'Auto-dispatched from driver queue'
+    });
+  }
+};
+
+// Route Optimization Engine API Endpoint
 const optimizeDriverRoute = async (req, res) => {
   try {
     const { driverId } = req.params;
-    const shipments = await populateShipment(Shipment.find({ driverId, status: { $in: ['PACKED', 'IN_TRANSIT'] } }));
+    // We now optimize based on QUEUED and IN_TRANSIT (if they want to see the sequence)
+    const shipments = await populateShipment(Shipment.find({ driverId, status: { $in: ['PACKED', 'QUEUED', 'IN_TRANSIT'] } }));
     
     if (!shipments.length) {
       return res.status(200).json({ message: 'No active shipments for this driver.', optimizedRoute: [] });
     }
 
-    // Optimization Heuristic 1: Priority ('High' > 'Normal' > 'Low')
-    // Optimization Heuristic 2: Weight (Heaviest first to reduce vehicle load quickly and save fuel)
-    const priorityWeight = { 'High': 3, 'Normal': 2, 'Low': 1 };
-    
-    const optimizedRoute = shipments.sort((a, b) => {
-      const pA = priorityWeight[a.priority] || 2;
-      const pB = priorityWeight[b.priority] || 2;
-      if (pA !== pB) return pB - pA; // Higher priority first
-      return b.weight - a.weight; // Heaviest first
-    });
+    const optimizedRoute = await getOptimizedSequence(shipments);
 
     res.status(200).json({
-      message: 'Route optimized successfully based on priority and load constraints.',
+      message: 'Route optimized successfully using Priority and Geographical Nearest-Neighbor algorithms.',
       optimizedRoute
     });
   } catch (error) {

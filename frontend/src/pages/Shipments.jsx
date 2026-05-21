@@ -15,7 +15,7 @@ import {
   UserPlus
 } from 'lucide-react';
 
-const statuses = ['PENDING', 'PACKED', 'IN_TRANSIT', 'DELIVERED'];
+const statuses = ['PENDING', 'PACKED', 'QUEUED', 'IN_TRANSIT', 'DELIVERED'];
 const priorities = ['Low', 'Normal', 'High', 'Urgent'];
 
 const fieldClass = 'w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20';
@@ -24,6 +24,7 @@ const StatusBadge = ({ status }) => {
   const styles = {
     PENDING: 'bg-slate-500/10 text-slate-300 border-slate-500/20',
     PACKED: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20',
+    QUEUED: 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20',
     IN_TRANSIT: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
     DELIVERED: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   };
@@ -40,7 +41,6 @@ const initialForm = {
   destination: '',
   weight: '',
   priority: 'Normal',
-  warehouseId: '',
   driverId: ''
 };
 
@@ -107,7 +107,6 @@ const Shipments = () => {
       await api.post('/shipments', {
         ...form,
         weight: Number(form.weight),
-        warehouseId: form.warehouseId || null,
         driverId: form.driverId || null
       });
       setForm(initialForm);
@@ -134,9 +133,9 @@ const Shipments = () => {
     setError('');
     setAssigningDriver(shipmentId);
     try {
-      // If assigning a driver and the shipment is still sitting at the warehouse, advance it to IN_TRANSIT
+      // If assigning a driver and the shipment is still sitting at the warehouse, queue it for dispatch
       const newStatus = driverId && (currentStatus === 'PENDING' || currentStatus === 'PACKED')
-        ? 'IN_TRANSIT'
+        ? 'QUEUED'
         : currentStatus;
 
       await api.patch(`/shipments/${shipmentId}/status`, {
@@ -331,12 +330,24 @@ const Shipments = () => {
           <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-medium text-slate-300">
-                Source
-                <input name="source" value={form.source} onChange={handleChange} className={fieldClass} required />
+                Source Warehouse
+                <select name="source" value={form.source} onChange={handleChange} className={fieldClass} required>
+                  <option value="">Select source warehouse</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.name}>{w.name}</option>
+                  ))}
+                </select>
               </label>
               <label className="grid gap-2 text-sm font-medium text-slate-300">
-                Destination
-                <input name="destination" value={form.destination} onChange={handleChange} className={fieldClass} required />
+                Destination Warehouse
+                <select name="destination" value={form.destination} onChange={handleChange} className={fieldClass} required>
+                  <option value="">Select destination warehouse</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.name} disabled={w.name === form.source}>
+                      {w.name} {w.name === form.source && '(Selected as Source)'}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -351,18 +362,7 @@ const Shipments = () => {
                 </select>
               </label>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-300">
-                Warehouse
-                <select name="warehouseId" value={form.warehouseId} onChange={handleChange} className={fieldClass}>
-                  <option value="">Auto-allocate (Smart Optimization)</option>
-                  {warehouses.map((warehouse) => (
-                    <option key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name} ({warehouse.capacity - warehouse.currentUsage} kg free)
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="grid gap-4 md:grid-cols-1">
               <label className="grid gap-2 text-sm font-medium text-slate-300">
                 Driver
                 <select name="driverId" value={form.driverId} onChange={handleChange} className={fieldClass}>
