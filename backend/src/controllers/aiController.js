@@ -32,7 +32,10 @@ exports.chatWithAI = async (req, res) => {
     - ${shipmentContext}
     `;
 
-    const systemPrompt = `You are LogiFlow AI, a specialized logistics and supply chain assistant. 
+    const systemPrompt = `You are LogiFlow AI, a specialized assistant for this logistics management website.
+    You may respond normally to greetings, thanks, and short conversational messages.
+    For actual questions or requests, only answer if they are related to LogiFlow, shipments, drivers, warehouses, delivery tracking, route optimization, dispatch, dashboard analytics, or logistics operations.
+    If the user asks about anything outside this website or logistics domain, politely say: "I can only help with LogiFlow-related logistics questions."
     Answer the user's question accurately and professionally using the following live database context if relevant.
     
     ${dbContext}
